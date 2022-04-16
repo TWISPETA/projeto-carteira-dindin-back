@@ -4,7 +4,7 @@ const listarTransacoes = async (req, res) => {
     const { usuario } = req;
 
     try {
-        const query = 'select *, transacoes.descricao as descricao, categorias.descricao as categoria_nome from transacoes join categorias on categorias.id = transacoes.categoria_id where usuario_id=$1';
+        const query = 'select *, transacoes.id as id, categorias.id as categoria_id, transacoes.descricao as descricao, categorias.descricao as categoria_nome from transacoes join categorias on categorias.id = transacoes.categoria_id where usuario_id=$1';
         const transacao = await conexao.query(query, [usuario.id]);
 
         return res.status(200).json(transacao.rows);
@@ -33,70 +33,72 @@ const detalharTransacao = async (req, res) => {
     }
 }
 
+
 const cadastrarTransacao = async (req, res) => {
     const { usuario } = req;
-
-    if (validarCampos(req)) {
-        const { descricao, valor, data, categoria_id, tipo } = req.body;
-
-        try {
-            const queryInsert = 'insert into transacoes(descricao, valor, data, categoria_id, tipo, usuario_id) values ($1, $2, $3, $4, $5, $6)';
-            await conexao.query(queryInsert, [descricao, valor, data, categoria_id, tipo, usuario.id]);
-
-            const querySelect = 'select * , transacoes.descricao as descricao, categorias.descricao as categoria_nome from transacoes join categorias on categorias.id = transacoes.categoria_id  where usuario_id = $1 order by id desc limit 1';
-            const { rows: ultimaTransacao } = await conexao.query(querySelect, [usuario.id]);
-
-            res.status(201).json(ultimaTransacao[0]);
-
-        } catch (e) {
-            res.status(400).json(e.message);
-        }
-    }
-
-    return res.status(400).json({ mensagem: "Todos os campos obrigatórios devem ser informados." });
-
-}
-
-const validarCampos = (req) => {
     const { descricao, valor, data, categoria_id, tipo } = req.body;
 
     if (!descricao || !valor || !data || !categoria_id || !tipo) {
-        return false;
+        return res.status(400).json({ mensagem: "Todos os campos obrigatórios devem ser informados." });
+    }
+
+    try {
+        const queryInsert = 'insert into transacoes(descricao, valor, data, categoria_id, tipo, usuario_id) values ($1, $2, $3, $4, $5, $6)';
+        await conexao.query(queryInsert, [descricao, valor, data, categoria_id, tipo, usuario.id]);
+
+        const querySelect = 'select *,transacoes.id as id, categorias.id as categoria_id , transacoes.descricao as descricao, categorias.descricao as categoria_nome from transacoes join categorias on categorias.id = transacoes.categoria_id  where usuario_id = $1 order by transacoes.id desc limit 1';
+        const { rows: ultimaTransacao } = await conexao.query(querySelect, [usuario.id]);
+
+        return res.status(201).json(ultimaTransacao[0]);
+
+    } catch (e) {
+        return res.status(400).json(e.message);
+    }
+
+}
+
+/* const validarCampos = (req) => {
+    const { descricao, valor, data, categoria_id, tipo } = req.body;
+
+    if (!descricao || !valor || !data || !categoria_id || !tipo) {
+        return;
     }
 
     if (tipo.toLowerCase() === 'entrada' || tipo.toLowerCase() === 'saida') {
-        return true;
+        return;
     }
 
     return false;
-}
+} */
 
 const atualizarTransacao = async (req, res) => {
     const { usuario } = req;
     const { id } = req.params;
+    const { descricao, valor, data, categoria_id, tipo } = req.body;
 
-    if (validarCampos(req)) {
-        const { descricao, valor, data, categoria_id, tipo } = req.body;
+    if (!descricao || !valor || !data || !categoria_id || !tipo) {
+        return res.status(400).json({ mensagem: "Todos os campos obrigatórios devem ser informados." });
+    };
 
-        try {
-            const querySelect = 'select * , transacoes.descricao as descricao, categorias.descricao as categoria_nome from transacoes join categorias on categorias.id = transacoes.categoria_id where id=$1 and usuario_id=$2';
-            const { rowCount } = await conexao.query(querySelect, [id, usuario.id]);
+    try {
+        const querySelect = 'select * , transacoes.id as id, categorias.id as categoria_id , transacoes.descricao as descricao, categorias.descricao as categoria_nome from transacoes join categorias on categorias.id = transacoes.categoria_id where transacoes.id=$1 and usuario_id=$2';
+        const { rowCount } = await conexao.query(querySelect, [id, usuario.id]);
 
-            if (rowCount === 0) {
-                return res.status(400).json({ mensagem: "Transação não localizada" })
-            }
-
-            const queryUpdate = 'update transacoes set descricao=$1, valor=$2, data=$3, categoria_id=$4, tipo=$5 where usuario_id=$6 and id=$7';
-            await conexao.query(queryUpdate, [descricao, valor, data, categoria_id, tipo, usuario.id, id]);
-
-
-        } catch (e) {
-            res.status(400).json({ mensagem: "Transação não localizada" });
+        if (rowCount === 0) {
+            return res.status(400).json({ mensagem: "Transação não localizada" })
         }
+
+        const queryUpdate = 'update transacoes set descricao=$1, valor=$2, data=$3, categoria_id=$4, tipo=$5 where usuario_id=$6 and id=$7';
+        await conexao.query(queryUpdate, [descricao, valor, data, categoria_id, tipo, usuario.id, id]);
+
+        return res.status(201).json();
+
+    } catch (e) {
+        return res.status(400).json(e.message);
     }
 
-    return res.status(400).json({ mensagem: "Todos os campos obrigatórios devem ser informados." });
 }
+
 
 const deletarTransacao = async (req, res) => {
     const { usuario } = req;
@@ -113,9 +115,9 @@ const deletarTransacao = async (req, res) => {
         const query = 'delete from transacoes where usuario_id=$1 and id=$2';
         await conexao.query(query, [usuario.id, id]);
 
-        res.status(200).json();
+        return res.status(200).json();
     } catch (e) {
-        res.status(400).json({ mensagem: "Transação não localizada" });
+        return res.status(400).json({ mensagem: "Transação não localizada" });
     }
 }
 
@@ -135,7 +137,7 @@ const extrato = async (req, res) => {
                 saida
             }
 
-            return res.status(400).json(retorno);
+            return res.status(200).json(retorno);
         } else if (rowCount === 1) {
             if (extrato[0].tipo === "entrada") {
                 const entrada = parseInt(extrato[0].sum);
